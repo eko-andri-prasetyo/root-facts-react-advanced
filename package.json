@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "RootFacts - AI Plant/Vegetable Fun Facts (React + Vite)",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0 <21.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
