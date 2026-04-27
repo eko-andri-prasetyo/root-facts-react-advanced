@@ -1,0 +1,8 @@
+Nama: Eko Andri Prasetyo
+Kelas: Belajar Penerapan AI di Aplikasi Web
+Submission: Proyek Akhir - Root Facts App
+Jalur: Advanced React
+URL Deployment Netlify: https://moonlit-salamander-8f592f.netlify.app
+
+Catatan:
+Jika Anda deploy ulang ke akun Netlify sendiri, ganti baris URL Deployment Netlify di atas dengan URL terbaru dari Netlify.
