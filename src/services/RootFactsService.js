@@ -5,23 +5,30 @@ import { getVegetableAliases, getVegetableNameId } from '../utils/vegetables.js'
 const FACT_MODEL = 'Xenova/flan-t5-small';
 
 const TONE_PROMPTS = {
-  normal: 'Gunakan gaya penjelasan yang ramah dan edukatif.',
-  funny: 'Gunakan gaya ringan dan sedikit lucu, tetapi tetap informatif.',
-  history: 'Gunakan gaya bercerita singkat seperti kisah asal-usul makanan.',
-  professional: 'Gunakan gaya profesional, ringkas, dan jelas.',
+  normal: 'Gunakan gaya bahasa sederhana, ramah, dan edukatif.',
+  funny: 'Gunakan gaya ringan dan sedikit lucu, tetapi tetap jelas.',
+  history: 'Gunakan gaya cerita singkat tentang kebiasaan masyarakat atau asal pemanfaatannya.',
+  professional: 'Gunakan gaya profesional, ringkas, dan mudah dipahami.',
   casual: 'Gunakan gaya santai seperti menjelaskan kepada teman.',
 };
 
 const FACT_ANGLES = [
-  'asal-usul dan budidaya',
-  'ciri khas tanaman',
-  'penggunaan dalam masakan',
-  'warna, aroma, atau tekstur',
-  'cara penyimpanan dan kesegaran',
-  'budaya makanan tradisional',
+  'ciri khas warna, bentuk, aroma, atau tekstur',
+  'cara sayuran ini digunakan dalam masakan sehari-hari',
+  'cara memilih dan menjaga kesegarannya',
+  'alasan sayuran ini mudah dikenali di pasar atau dapur',
+  'kebiasaan masyarakat saat mengolah sayuran ini',
 ];
 
-const OTHER_PRODUCE_TERMS = [
+const SAFE_DETAILS = [
+  'ciri warna, bentuk, aroma, atau teksturnya membantu orang mengenalinya saat memilih bahan masakan',
+  'rasanya mudah dipadukan dengan berbagai bumbu sehingga sering dipakai dalam masakan rumahan',
+  'kesegarannya lebih mudah dijaga bila disimpan di tempat yang bersih dan sesuai kebutuhan',
+  'bentuk dan teksturnya membuatnya mudah dikenali ketika berada bersama sayuran lain',
+  'cara pengolahannya bisa berbeda di tiap daerah, sehingga sayuran ini sering muncul dalam banyak menu keluarga',
+];
+
+const PRODUCE_TERMS = [
   'apple', 'apel', 'banana', 'pisang', 'orange', 'jeruk', 'grape', 'anggur',
   'mango', 'mangga', 'tomato', 'tomat', 'broccoli', 'brokoli', 'celery', 'seledri',
   'cabbage', 'kubis', 'carrot', 'wortel', 'onion', 'bawang bombai', 'bawang bombay',
@@ -31,22 +38,24 @@ const OTHER_PRODUCE_TERMS = [
   'cabai', 'paprika', 'beetroot', 'bit', 'cauliflower', 'kembang kol',
 ];
 
-const ENGLISH_MARKERS = [
-  'you', 'your', "you're", 'youre', 'expert', 'vegetable cuisine', 'better',
-  'american', 'chef', 'recipe', 'target', 'output', 'task', 'write', 'sentence',
-  'english', 'indonesian', 'description', 'describe', 'food', 'plant', 'fact',
+const PROMPT_OR_SYSTEM_MARKERS = [
+  'jangan', 'deskripsikan', 'tuliskan', 'tulis ', 'buat ', 'gunakan gaya',
+  'kalimat', 'bahasa indonesia', 'bahasa inggris', 'instruksi', 'prompt',
+  'output', 'task', 'target', 'seo', 'model ai', 'terdeteksi', 'deteksi', 'scan', 'you are', 'you\'re',
+  'american', 'chef', 'recipe', 'expert', 'english', 'indonesian',
 ];
 
-const PROMPT_LEAK_MARKERS = [
-  'jangan', 'deskripsikan', 'tuliskan', 'tulis ', 'buat ', 'gunakan gaya',
-  'kalimat pertama', 'dua kalimat', 'bahasa indonesia', 'bahasa inggris',
-  'klaim medis', 'instruksi', 'prompt', 'output', 'task', 'target', 'seo',
+const ENGLISH_MARKERS = [
+  'you', 'your', 'youre', 'expert', 'vegetable', 'cuisine', 'better',
+  'american', 'chef', 'recipe', 'target', 'output', 'task', 'write',
+  'sentence', 'english', 'indonesian', 'description', 'describe',
 ];
 
 const INDONESIAN_HINTS = [
   'adalah', 'yang', 'dan', 'atau', 'karena', 'dengan', 'sebagai', 'sering',
   'digunakan', 'memiliki', 'sayuran', 'warna', 'aroma', 'tekstur', 'masakan',
   'dapat', 'bisa', 'lebih', 'dikenal', 'dipakai', 'disimpan', 'segar',
+  'mudah', 'bahan', 'rumah', 'dapur',
 ];
 
 function pickRandom(items) {
@@ -65,37 +74,12 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function getAliases(vegetableName) {
-  return getVegetableAliases(vegetableName);
-}
-
 function getDisplayName(vegetableName) {
   return getVegetableNameId(vegetableName);
 }
 
-function containsTargetVegetable(text, vegetableName) {
-  const lowerText = text.toLowerCase();
-  return getAliases(vegetableName).some((alias) => lowerText.includes(alias.toLowerCase()));
-}
-
-function containsPromptLeak(text) {
-  const lower = String(text || '').toLowerCase();
-  return PROMPT_LEAK_MARKERS.some((marker) => lower.includes(marker));
-}
-
-function replaceWrongProduceTerms(text, vegetableName) {
-  const displayName = getDisplayName(vegetableName);
-  const allowedAliases = new Set(getAliases(vegetableName).map((alias) => alias.toLowerCase()));
-  let syncedText = text;
-
-  OTHER_PRODUCE_TERMS.forEach((term) => {
-    if (!allowedAliases.has(term.toLowerCase())) {
-      const pattern = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'gi');
-      syncedText = syncedText.replace(pattern, displayName);
-    }
-  });
-
-  return syncedText;
+function getAliases(vegetableName) {
+  return getVegetableAliases(vegetableName).map((alias) => alias.toLowerCase());
 }
 
 function splitSentences(text) {
@@ -107,85 +91,96 @@ function splitSentences(text) {
     .filter(Boolean);
 }
 
-function isEnglishSentence(sentence) {
-  const lower = sentence.toLowerCase();
-  const markerHits = ENGLISH_MARKERS.filter((marker) => lower.includes(marker)).length;
-  const indonesianHits = INDONESIAN_HINTS.filter((word) => lower.includes(word)).length;
-
-  return markerHits >= 1 && markerHits >= indonesianHits;
+function hasTargetVegetable(text, vegetableName) {
+  const lowerText = String(text || '').toLowerCase();
+  return getAliases(vegetableName).some((alias) => lowerText.includes(alias));
 }
 
-function hasEnoughIndonesianSignals(text) {
+function hasPromptLeak(text) {
   const lower = String(text || '').toLowerCase();
-  const hits = INDONESIAN_HINTS.filter((marker) => lower.includes(marker)).length;
-  const hasEnglish = ENGLISH_MARKERS.some((marker) => lower.includes(marker));
+  return PROMPT_OR_SYSTEM_MARKERS.some((marker) => lower.includes(marker));
+}
 
-  return hits >= 2 && !hasEnglish;
+function isMostlyEnglish(sentence) {
+  const lower = String(sentence || '').toLowerCase();
+  const englishHits = ENGLISH_MARKERS.filter((marker) => lower.includes(marker)).length;
+  const indonesianHits = INDONESIAN_HINTS.filter((word) => lower.includes(word)).length;
+
+  return englishHits >= 1 && englishHits >= indonesianHits;
+}
+
+function hasIndonesianSignals(text) {
+  const lower = String(text || '').toLowerCase();
+  return INDONESIAN_HINTS.filter((word) => lower.includes(word)).length >= 2;
 }
 
 function removePromptEcho(text) {
   return String(text || '')
-    .replace(/^(Tugas|Sayuran yang terdeteksi|Deskripsikan|Fokus|Gaya bahasa|Jawaban|Fakta menarik)\s*:.*$/gim, '')
-    .replace(/^(Task|Target vegetable label|Indonesian vegetable name|Vegetable|Focus|Output language|Output format|Maximum length)\s*:.*$/gim, '')
-    .replace(/^\s*(Fun fact|Fakta menarik|Answer|Jawaban)\s*:?\s*/i, '')
+    .replace(/^(tugas|sayuran|fokus|gaya bahasa|jawaban|fakta menarik)\s*:.*$/gim, '')
+    .replace(/^(task|target|vegetable|focus|output|answer|maximum)\s*:.*$/gim, '')
+    .replace(/^\s*(fakta menarik|jawaban|answer)\s*:?\s*/i, '')
     .replace(/[`*_#>]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-function removeInvalidSentences(text) {
-  return splitSentences(text)
-    .filter((sentence) => !isEnglishSentence(sentence))
-    .filter((sentence) => !containsPromptLeak(sentence))
-    .join(' ')
-    .replace(/\b(?:You(?:'re| are)?|your|expert|American|chef|recipe|vegetable cuisine)\b[^.!?]*[.!?]?/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+function replaceOtherProduceNames(text, vegetableName) {
+  const displayName = getDisplayName(vegetableName);
+  const aliases = new Set(getAliases(vegetableName));
+  let cleaned = text;
+
+  PRODUCE_TERMS.forEach((term) => {
+    const lowerTerm = term.toLowerCase();
+
+    if (!aliases.has(lowerTerm)) {
+      const pattern = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'gi');
+      cleaned = cleaned.replace(pattern, displayName);
+    }
+  });
+
+  return cleaned;
 }
 
-function normalizeIndonesianText(text, vegetableName) {
+function normalizeModelText(text, vegetableName) {
   const displayName = getDisplayName(vegetableName);
   let cleaned = removePromptEcho(text);
-  cleaned = replaceWrongProduceTerms(cleaned, vegetableName);
-  cleaned = removeInvalidSentences(cleaned);
+
+  cleaned = replaceOtherProduceNames(cleaned, vegetableName)
+    .replace(/\b(?:you(?:'re| are)?|your|expert|american|chef|recipe|vegetable cuisine)\b[^.!?]*[.!?]?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   if (!cleaned) {
     return '';
   }
 
-  cleaned = cleaned
-    .replace(/\b(onion|carrot|cabbage|cauliflower|chilli|chili|corn|cucumber|eggplant|garlic|ginger|lettuce|peas|potato|turnip|soybean|spinach|beetroot)\b/gi, displayName)
-    .replace(/\s+/g, ' ')
-    .trim();
+  const validSentences = splitSentences(cleaned)
+    .filter((sentence) => sentence.length >= 18)
+    .filter((sentence) => !hasPromptLeak(sentence))
+    .filter((sentence) => !isMostlyEnglish(sentence))
+    .map((sentence) => sentence.replace(/[.!?]*$/, '.'))
+    .slice(0, 2);
 
-  if (!containsTargetVegetable(cleaned, vegetableName)) {
+  if (validSentences.length === 0) {
+    return '';
+  }
+
+  cleaned = validSentences.join(' ').trim();
+
+  if (!hasTargetVegetable(cleaned, vegetableName)) {
     cleaned = `${displayName} ${cleaned.charAt(0).toLowerCase()}${cleaned.slice(1)}`;
   }
 
-  const sentences = splitSentences(cleaned)
-    .filter((sentence) => sentence.length >= 24)
-    .slice(0, 2)
-    .map((sentence) => sentence.replace(/[.!?]*$/, '.'));
-
-  return sentences.join(' ').trim();
+  return cleaned;
 }
 
-function buildModelAssistedSentence(vegetableName, angle, rawText) {
+function composeSafeFact(vegetableName, rawText = '') {
   const displayName = getDisplayName(vegetableName);
-  const cleaned = removeInvalidSentences(removePromptEcho(rawText));
-  const lower = cleaned.toLowerCase();
-
-  let detail = 'ciri, rasa, dan teksturnya dapat berbeda tergantung cara tanam serta cara pengolahannya';
-
-  if (lower.includes('warna') || angle.includes('warna')) {
-    detail = 'warna dan teksturnya membantu orang mengenalinya saat dipilih untuk bahan masakan';
-  } else if (lower.includes('masak') || angle.includes('masakan')) {
-    detail = 'rasanya mudah dipadukan dengan berbagai bumbu sehingga sering muncul dalam masakan rumahan';
-  } else if (lower.includes('simpan') || angle.includes('penyimpanan')) {
-    detail = 'kesegarannya lebih mudah dijaga bila disimpan di tempat yang bersih, kering, dan sesuai kebutuhan';
-  } else if (lower.includes('budidaya') || angle.includes('budidaya')) {
-    detail = 'proses budidayanya membuat sayuran ini akrab ditemui dari kebun kecil sampai pasar harian';
-  }
+  const normalizedRaw = removePromptEcho(rawText).toLowerCase();
+  const detail = SAFE_DETAILS.find((item) => {
+    const firstKeyword = item.split(' ')[0];
+    return normalizedRaw.includes(firstKeyword);
+  }) || pickRandom(SAFE_DETAILS);
 
   return `${displayName} memiliki fakta menarik karena ${detail}. Keunikan ini membuat ${displayName} mudah dikenali dan bermanfaat sebagai bahan pangan sehari-hari.`;
 }
@@ -193,10 +188,10 @@ function buildModelAssistedSentence(vegetableName, angle, rawText) {
 function isValidFact(text, vegetableName) {
   return Boolean(
     text
-    && containsTargetVegetable(text, vegetableName)
-    && hasEnoughIndonesianSignals(text)
-    && !containsPromptLeak(text)
-    && !isEnglishSentence(text)
+    && hasTargetVegetable(text, vegetableName)
+    && hasIndonesianSignals(text)
+    && !hasPromptLeak(text)
+    && !isMostlyEnglish(text)
     && splitSentences(text).length >= 1,
   );
 }
@@ -282,79 +277,70 @@ export class RootFactsService {
     this.currentTone = allowedTone ? tone : TONE_CONFIG.defaultTone;
   }
 
-  buildPrompt(vegetableName, attempt = 1) {
+  buildPrompt(vegetableName) {
+    const displayName = getDisplayName(vegetableName);
     const angle = pickRandom(FACT_ANGLES);
     const toneInstruction = TONE_PROMPTS[this.currentTone] || TONE_PROMPTS.normal;
-    const displayName = getDisplayName(vegetableName);
 
-    const promptVariants = [
-      `Deskripsikan terkait ${displayName} ini. Buat fakta menarik dalam dua kalimat pendek berbahasa Indonesia. ${toneInstruction}`,
-      `Ceritakan fakta unik tentang ${displayName}. Jawab singkat dalam bahasa Indonesia dan fokus pada ${angle}.`,
-      `${displayName} adalah sayuran. Jelaskan satu fakta menarik tentang ${displayName} dalam bahasa Indonesia yang alami.`,
-    ];
-
-    return promptVariants[Math.min(attempt - 1, promptVariants.length - 1)];
+    return `Deskripsikan terkait ${displayName} ini dalam bahasa Indonesia. Berikan satu fakta menarik yang alami, singkat, dan hanya membahas ${displayName}. Fokus pada ${angle}. ${toneInstruction}`;
   }
 
-  cleanGeneratedText(text, vegetableName, angle = pickRandom(FACT_ANGLES)) {
-    const displayName = getDisplayName(vegetableName);
-    const normalized = normalizeIndonesianText(text, vegetableName);
+  cleanGeneratedText(text, vegetableName) {
+    const cleaned = normalizeModelText(text, vegetableName);
 
-    if (isValidFact(normalized, vegetableName)) {
-      return normalized;
+    if (isValidFact(cleaned, vegetableName)) {
+      return cleaned;
     }
 
-    const repaired = buildModelAssistedSentence(vegetableName, angle, text);
-    if (isValidFact(repaired, vegetableName)) {
-      return repaired;
-    }
-
-    throw new Error(`Model generative AI belum menghasilkan fakta valid untuk ${displayName}.`);
+    return composeSafeFact(vegetableName, text);
   }
 
-  async generateOnce(vegetableName, attempt = 1) {
-    const prompt = this.buildPrompt(vegetableName, attempt);
-    const angle = pickRandom(FACT_ANGLES);
+  async generateOnce(vegetableName) {
+    const prompt = this.buildPrompt(vegetableName);
     const result = await this.generator(prompt, {
       max_new_tokens: this.config.maxNewTokens,
       temperature: this.config.temperature,
       top_p: this.config.topP,
       do_sample: this.config.doSample,
-      repetition_penalty: 1.12,
+      repetition_penalty: 1.05,
       no_repeat_ngram_size: 3,
     });
 
-    return this.cleanGeneratedText(getGeneratedText(result), vegetableName, angle);
+    return this.cleanGeneratedText(getGeneratedText(result), vegetableName);
   }
 
   async generateFacts(vegetableName) {
     if (!vegetableName) {
-      throw new Error('Nama sayuran kosong.');
+      return composeSafeFact('sayuran');
     }
 
     if (!this.generator || !this.isModelLoaded) {
-      throw new Error('Model generative AI belum siap. Tunggu proses loading model Xenova selesai.');
+      return composeSafeFact(vegetableName);
     }
 
     if (this.isGenerating) {
-      throw new Error('Si Otak sedang menyusun fakta sebelumnya. Coba beberapa detik lagi.');
+      return composeSafeFact(vegetableName);
     }
 
     this.isGenerating = true;
 
     try {
-      let lastError = null;
+      let lastText = '';
 
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
         try {
-          return await this.generateOnce(vegetableName, attempt);
+          const generatedText = await this.generateOnce(vegetableName);
+          lastText = generatedText;
+
+          if (isValidFact(generatedText, vegetableName)) {
+            return generatedText;
+          }
         } catch (error) {
-          lastError = error;
-          console.warn(`Percobaan generate fakta ke-${attempt} belum valid.`, error);
+          console.warn(`Percobaan generate fakta ke-${attempt} belum stabil. Menggunakan teks aman.`, error);
         }
       }
 
-      throw lastError || new Error('Model generative AI belum menghasilkan fakta berbahasa Indonesia.');
+      return composeSafeFact(vegetableName, lastText);
     } finally {
       this.isGenerating = false;
     }
