@@ -1,8 +1,10 @@
 export const APP_CONFIG = {
-  detectionConfidenceThreshold: 70,
-  analyzingDelay: 300,
+  detectionConfidenceThreshold: 85,
+  analyzingDelay: 900,
   factsGenerationDelay: 250,
-  detectionRetryInterval: 100,
+  detectionRetryInterval: 120,
+  requiredStableFrames: 3,
+  cameraWarmupDelay: 700,
   defaultFps: 15,
 };
 

@@ -1,4 +1,5 @@
-import { getCameraErrorMessage } from '../utils/common.js';
+import { createDelay, getCameraErrorMessage } from '../utils/common.js';
+import { APP_CONFIG } from '../utils/config.js';
 
 export class CameraService {
   constructor() {
@@ -67,19 +68,53 @@ export class CameraService {
       const constraints = this.getConstraints(selectedCamera);
       this.stream = await navigator.mediaDevices.getUserMedia(constraints);
       this.video.srcObject = this.stream;
+      this.video.muted = true;
+      this.video.playsInline = true;
 
       await new Promise((resolve, reject) => {
-        this.video.onloadedmetadata = () => {
-          this.video.play().then(resolve).catch(reject);
+        const timeout = window.setTimeout(() => reject(new Error('Timeout saat menyalakan kamera.')), 6000);
+
+        const resolveWhenReady = async () => {
+          try {
+            await this.video.play();
+            window.clearTimeout(timeout);
+            resolve();
+          } catch (error) {
+            window.clearTimeout(timeout);
+            reject(error);
+          }
         };
+
+        if (this.video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          resolveWhenReady();
+          return;
+        }
+
+        this.video.onloadedmetadata = resolveWhenReady;
       });
 
+      await this.waitUntilReady();
       await this.loadCameras();
       return this.stream;
     } catch (error) {
       this.stopCamera();
       throw new Error(getCameraErrorMessage(error));
     }
+  }
+
+  async waitUntilReady(maxWaitMs = 5000) {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < maxWaitMs) {
+      if (this.isReady()) {
+        await createDelay(APP_CONFIG.cameraWarmupDelay);
+        return true;
+      }
+
+      await createDelay(100);
+    }
+
+    throw new Error('Kamera belum siap mengirim frame video. Coba izinkan kamera lalu mulai ulang scan.');
   }
 
   stopCamera() {
@@ -91,6 +126,8 @@ export class CameraService {
     if (this.video) {
       this.video.pause();
       this.video.srcObject = null;
+      this.video.removeAttribute('src');
+      this.video.load?.();
     }
   }
 
@@ -105,13 +142,25 @@ export class CameraService {
     return this.frameInterval;
   }
 
+  hasLiveVideoTrack() {
+    return Boolean(
+      this.stream
+      && this.stream.active
+      && this.stream.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled),
+    );
+  }
+
   isActive() {
-    return Boolean(this.stream && this.stream.active);
+    return this.hasLiveVideoTrack();
   }
 
   isReady() {
     return Boolean(
-      this.video
+      this.hasLiveVideoTrack()
+      && this.video
+      && this.video.srcObject === this.stream
+      && !this.video.paused
+      && !this.video.ended
       && this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
       && this.video.videoWidth > 0
       && this.video.videoHeight > 0,

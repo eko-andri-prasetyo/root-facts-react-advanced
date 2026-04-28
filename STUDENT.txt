@@ -2,6 +2,4 @@ Nama: Eko Andri Prasetyo
 Username Dicoding: ekoandriprasetyo
 Kelas: Belajar Penerapan AI di Aplikasi Web
 Submission: Root Facts App
-
-URL Deployment: GANTI_DENGAN_URL_VERCEL_ATAU_NETLIFY_ANDA
-Catatan: Versi ini sudah memakai model generative AI Xenova/flan-t5-small via Transformers.js dan manifest PWA tersedia di /manifest.json.
+URL Deployment: https://root-facts-react-advanced.vercel.app

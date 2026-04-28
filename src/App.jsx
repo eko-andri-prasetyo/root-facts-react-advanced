@@ -13,11 +13,17 @@ function App() {
   const { state, actions } = useAppState();
   const animationFrameRef = useRef(null);
   const isRunningRef = useRef(false);
+  const isGeneratingResultRef = useRef(false);
   const lastPredictionAtRef = useRef(0);
+  const stableDetectionRef = useRef({ className: null, count: 0 });
   const initializedRef = useRef(false);
   const servicesRef = useRef({ detector: null, camera: null, generator: null });
   const [currentTone, setCurrentTone] = useState(TONE_CONFIG.defaultTone);
   const [copyStatus, setCopyStatus] = useState('idle');
+
+  const resetStableDetection = useCallback(() => {
+    stableDetectionRef.current = { className: null, count: 0 };
+  }, []);
 
   const stopDetectionLoop = useCallback(() => {
     isRunningRef.current = false;
@@ -30,9 +36,11 @@ function App() {
 
   const stopCamera = useCallback(() => {
     stopDetectionLoop();
+    resetStableDetection();
+    isGeneratingResultRef.current = false;
     servicesRef.current.camera?.stopCamera();
     actions.setRunning(false);
-  }, [actions, stopDetectionLoop]);
+  }, [actions, resetStableDetection, stopDetectionLoop]);
 
   const generateFunFact = useCallback(async (result) => {
     const { generator } = servicesRef.current;
@@ -50,11 +58,36 @@ function App() {
   }, [actions]);
 
   const handleDetectionResult = useCallback(async (result) => {
-    stopCamera();
+    if (isGeneratingResultRef.current) {
+      return;
+    }
+
+    isGeneratingResultRef.current = true;
+
+    // Stop only the prediction loop. Keep the camera stream visible so the UI
+    // stays synchronized with the detected object and does not show a result
+    // while the webcam is black/inactive.
+    stopDetectionLoop();
     actions.setDetectionResult(result);
     actions.setAppState('result');
     await generateFunFact(result);
-  }, [actions, generateFunFact, stopCamera]);
+  }, [actions, generateFunFact, stopDetectionLoop]);
+
+  const updateStableDetection = useCallback((result) => {
+    if (!isValidDetection(result)) {
+      resetStableDetection();
+      return { stable: false, result: null };
+    }
+
+    const current = stableDetectionRef.current;
+    const count = current.className === result.className ? current.count + 1 : 1;
+    stableDetectionRef.current = { className: result.className, count };
+
+    return {
+      stable: count >= APP_CONFIG.requiredStableFrames,
+      result: { ...result, stableFrameCount: count },
+    };
+  }, [resetStableDetection]);
 
   const runDetectionLoop = useCallback(() => {
     const loop = async (timestamp) => {
@@ -71,33 +104,36 @@ function App() {
         try {
           if (camera?.isReady() && detector?.isLoaded()) {
             const result = await detector.predict(camera.video);
+            const { stable, result: stableResult } = updateStableDetection(result);
 
-            if (result) {
-              actions.setDetectionResult(result);
-            }
-
-            if (isValidDetection(result)) {
-              await handleDetectionResult(result);
+            if (stable && stableResult) {
+              await handleDetectionResult(stableResult);
               return;
             }
+          } else {
+            resetStableDetection();
           }
         } catch (error) {
           logError('runDetectionLoop', error);
           actions.setError(error.message);
+          resetStableDetection();
         }
+
+        await createDelay(APP_CONFIG.detectionRetryInterval);
       }
 
       animationFrameRef.current = requestAnimationFrame(loop);
     };
 
     animationFrameRef.current = requestAnimationFrame(loop);
-  }, [actions, handleDetectionResult]);
+  }, [actions, handleDetectionResult, resetStableDetection, updateStableDetection]);
 
   const handleToggleCamera = useCallback(async () => {
     const { camera, detector, generator } = servicesRef.current;
 
     if (state.isRunning) {
       stopCamera();
+      actions.resetResults();
       actions.setAppState('idle');
       return;
     }
@@ -109,20 +145,28 @@ function App() {
 
     try {
       actions.resetResults();
+      resetStableDetection();
+      isGeneratingResultRef.current = false;
       actions.setAppState('analyzing');
       await camera.startCamera();
       await createDelay(APP_CONFIG.analyzingDelay);
+
+      if (!camera.isReady()) {
+        throw new Error('Kamera belum siap. Coba tekan Stop lalu Mulai Scan kembali.');
+      }
+
       actions.setRunning(true);
       isRunningRef.current = true;
-      lastPredictionAtRef.current = 0;
+      lastPredictionAtRef.current = performance.now();
       runDetectionLoop();
     } catch (error) {
       logError('handleToggleCamera', error);
+      stopCamera();
       actions.setError(error.message);
       actions.setAppState('idle');
       actions.setRunning(false);
     }
-  }, [actions, runDetectionLoop, state.isRunning, stopCamera]);
+  }, [actions, resetStableDetection, runDetectionLoop, state.isRunning, stopCamera]);
 
   const handleToneChange = useCallback((tone) => {
     setCurrentTone(tone);

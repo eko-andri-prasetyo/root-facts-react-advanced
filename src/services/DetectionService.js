@@ -84,29 +84,67 @@ export class DetectionService {
     };
   }
 
+  hasActiveVideoFrame(imageElement) {
+    if (!imageElement || imageElement.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      return false;
+    }
+
+    const stream = imageElement.srcObject;
+    const hasLiveTrack = Boolean(
+      stream
+      && stream.active
+      && typeof stream.getVideoTracks === 'function'
+      && stream.getVideoTracks().some((track) => track.readyState === 'live' && track.enabled),
+    );
+
+    return Boolean(
+      hasLiveTrack
+      && !imageElement.paused
+      && !imageElement.ended
+      && imageElement.videoWidth > 0
+      && imageElement.videoHeight > 0,
+    );
+  }
+
   async predict(imageElement) {
     if (!this.isLoaded()) {
       throw new Error('Model deteksi belum siap.');
     }
 
-    if (!imageElement || imageElement.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    if (!this.hasActiveVideoFrame(imageElement)) {
       return null;
     }
 
-    const scores = tf.tidy(() => {
+    const predictionData = tf.tidy(() => {
       const pixels = tf.browser.fromPixels(imageElement);
       const resized = tf.image.resizeBilinear(
         pixels,
         [this.config.imageSize, this.config.imageSize],
         true,
       );
-      const normalized = resized.toFloat().div(127.5).sub(1);
+      const frame = resized.toFloat();
+      const frameMean = frame.mean();
+      const centered = frame.sub(frameMean);
+      const frameStd = centered.square().mean().sqrt();
+      const brightness = frameMean.dataSync()[0];
+      const contrast = frameStd.dataSync()[0];
+
+      if (brightness < 8 || contrast < 3) {
+        return { scores: [], frameQuality: { brightness, contrast, isReadable: false } };
+      }
+
+      const normalized = frame.div(127.5).sub(1);
       const batched = normalized.expandDims(0);
       const prediction = this.model.predict(batched);
       const output = Array.isArray(prediction) ? prediction[0] : prediction;
 
-      return Array.from(output.dataSync());
+      return {
+        scores: Array.from(output.dataSync()),
+        frameQuality: { brightness, contrast, isReadable: true },
+      };
     });
+
+    const { scores, frameQuality } = predictionData;
 
     if (!scores.length) {
       return null;
@@ -126,6 +164,7 @@ export class DetectionService {
       confidence,
       isValid: confidence >= this.config.confidenceThreshold,
       backend: this.currentBackend,
+      frameQuality,
       allScores: this.labels.map((label, index) => ({
         label,
         score: scores[index] ?? 0,
