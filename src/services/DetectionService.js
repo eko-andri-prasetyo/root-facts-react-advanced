@@ -1,6 +1,7 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgpu';
 import { APP_CONFIG } from '../utils/config.js';
+import { getVegetableNameId } from '../utils/vegetables.js';
 import { isWebGPUSupported, validateModelMetadata } from '../utils/common.js';
 
 const MODEL_URL = '/model/model.json';
@@ -157,9 +158,11 @@ export class DetectionService {
 
     const confidence = Math.round(highest.score * 100);
     const className = this.labels[highest.index] || 'Tidak diketahui';
+    const displayName = getVegetableNameId(className);
 
     return {
       className,
+      displayName,
       score: highest.score,
       confidence,
       isValid: confidence >= this.config.confidenceThreshold,
@@ -167,6 +170,7 @@ export class DetectionService {
       frameQuality,
       allScores: this.labels.map((label, index) => ({
         label,
+        displayName: getVegetableNameId(label),
         score: scores[index] ?? 0,
         confidence: Math.round((scores[index] ?? 0) * 100),
       })),

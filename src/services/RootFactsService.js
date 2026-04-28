@@ -1,66 +1,25 @@
 import { TONE_CONFIG, ROOT_FACTS_CONFIG } from '../utils/config.js';
 import { isWebGPUSupported } from '../utils/common.js';
+import { getVegetableAliases, getVegetableNameId } from '../utils/vegetables.js';
 
 const FACT_MODEL = 'Xenova/flan-t5-small';
 
 const TONE_PROMPTS = {
-  normal: 'Use a friendly and educational tone.',
-  funny: 'Use a playful and funny tone, but keep it polite.',
-  history: 'Use a short historical storyteller tone and include cultural context when possible.',
-  professional: 'Use a concise, professional, and science-informed tone.',
-  casual: 'Use a warm, casual tone as if explaining to a friend.',
+  normal: 'Gunakan gaya bahasa edukatif, ramah, dan mudah dipahami.',
+  funny: 'Gunakan gaya bahasa lucu, ringan, dan tetap sopan.',
+  history: 'Gunakan gaya bercerita sejarah yang singkat dan menarik.',
+  professional: 'Gunakan gaya profesional, padat, dan informatif.',
+  casual: 'Gunakan gaya santai seperti menjelaskan kepada teman.',
 };
 
 const FACT_ANGLES = [
-  'origin and cultivation',
-  'unique plant characteristics',
-  'culinary use',
-  'color, smell, or texture',
-  'storage and freshness',
-  'traditional food culture',
+  'asal-usul dan budidaya',
+  'ciri khas tanaman',
+  'penggunaan dalam masakan',
+  'warna, aroma, atau tekstur',
+  'cara penyimpanan dan kesegaran',
+  'budaya makanan tradisional',
 ];
-
-const VEGETABLE_ALIASES = {
-  Beetroot: ['beetroot', 'bit', 'umbi bit'],
-  Paprika: ['paprika', 'bell pepper'],
-  Cabbage: ['cabbage', 'kubis', 'kol'],
-  Carrot: ['carrot', 'wortel'],
-  Cauliflower: ['cauliflower', 'kembang kol'],
-  Chilli: ['chilli', 'chili', 'cabai', 'cabe'],
-  Corn: ['corn', 'jagung'],
-  Cucumber: ['cucumber', 'mentimun', 'timun'],
-  eggplant: ['eggplant', 'terong'],
-  Garlic: ['garlic', 'bawang putih'],
-  Ginger: ['ginger', 'jahe'],
-  Lettuce: ['lettuce', 'selada'],
-  Onion: ['onion', 'bawang bombai', 'bawang bawang bombay', 'bawang bombay'],
-  Peas: ['peas', 'kacang polong'],
-  Potato: ['potato', 'kentang'],
-  Turnip: ['turnip', 'lobak putih kecil', 'turnip'],
-  Soybean: ['soybean', 'kedelai'],
-  Spinach: ['spinach', 'bayam'],
-};
-
-const DISPLAY_NAMES = {
-  Beetroot: 'bit',
-  Paprika: 'paprika',
-  Cabbage: 'kubis',
-  Carrot: 'wortel',
-  Cauliflower: 'kembang kol',
-  Chilli: 'cabai',
-  Corn: 'jagung',
-  Cucumber: 'mentimun',
-  eggplant: 'terong',
-  Garlic: 'bawang putih',
-  Ginger: 'jahe',
-  Lettuce: 'selada',
-  Onion: 'bawang bombai',
-  Peas: 'kacang polong',
-  Potato: 'kentang',
-  Turnip: 'turnip',
-  Soybean: 'kedelai',
-  Spinach: 'bayam',
-};
 
 const OTHER_PRODUCE_TERMS = [
   'apple', 'apel', 'banana', 'pisang', 'orange', 'jeruk', 'grape', 'anggur',
@@ -68,7 +27,14 @@ const OTHER_PRODUCE_TERMS = [
   'cabbage', 'kubis', 'carrot', 'wortel', 'onion', 'bawang bombai', 'bawang bombay',
   'potato', 'kentang', 'corn', 'jagung', 'spinach', 'bayam', 'cucumber', 'mentimun',
   'eggplant', 'terong', 'garlic', 'bawang putih', 'ginger', 'jahe', 'lettuce', 'selada',
-  'peas', 'kacang polong', 'soybean', 'kedelai', 'turnip', 'chilli', 'cabai', 'paprika',
+  'peas', 'kacang polong', 'soybean', 'kedelai', 'turnip', 'lobak', 'chilli', 'chili', 'cabai', 'paprika',
+  'beetroot', 'bit', 'cauliflower', 'kembang kol',
+];
+
+const ENGLISH_MARKERS = [
+  'you', 'your', "you're", 'youre', 'expert', 'vegetable cuisine', 'better',
+  'american', 'chef', 'recipe', 'this', 'that', 'the', 'and', 'but', 'with',
+  'target', 'output', 'task', 'write', 'sentence', 'english', 'indonesian',
 ];
 
 function pickRandom(items) {
@@ -88,11 +54,11 @@ function escapeRegExp(value) {
 }
 
 function getAliases(vegetableName) {
-  return VEGETABLE_ALIASES[vegetableName] || [vegetableName.toLowerCase()];
+  return getVegetableAliases(vegetableName);
 }
 
 function getDisplayName(vegetableName) {
-  return DISPLAY_NAMES[vegetableName] || vegetableName;
+  return getVegetableNameId(vegetableName);
 }
 
 function containsTargetVegetable(text, vegetableName) {
@@ -113,6 +79,73 @@ function replaceWrongProduceTerms(text, vegetableName) {
   });
 
   return syncedText;
+}
+
+function splitSentences(text) {
+  return String(text || '')
+    .replace(/([.!?])\s+/g, '$1|')
+    .split('|')
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function isEnglishSentence(sentence) {
+  const lower = sentence.toLowerCase();
+  const asciiWords = lower.match(/[a-z]+/g) || [];
+  const markerHits = ENGLISH_MARKERS.filter((marker) => lower.includes(marker)).length;
+  const indonesianHints = [
+    'adalah', 'yang', 'dan', 'atau', 'karena', 'dengan', 'sebagai', 'sering',
+    'digunakan', 'memiliki', 'sayuran', 'warna', 'aroma', 'tekstur', 'masakan',
+    'bawang', 'wortel', 'kubis', 'cabai', 'jagung', 'mentimun', 'terong',
+  ].filter((word) => lower.includes(word)).length;
+
+  return markerHits >= 1 && markerHits >= indonesianHints && asciiWords.length >= 3;
+}
+
+function removeMixedEnglish(text) {
+  return splitSentences(text)
+    .filter((sentence) => !isEnglishSentence(sentence))
+    .join(' ')
+    .replace(/\b(?:You(?:'re| are)?|your|expert|American|chef|recipe|vegetable cuisine|but you'?d better have an?)\b[^.!?]*[.!?]?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isMostlyIndonesian(text) {
+  const lower = String(text || '').toLowerCase();
+  if (!lower) return false;
+
+  const hasEnglish = ENGLISH_MARKERS.some((marker) => lower.includes(marker));
+  const hasIndonesian = [
+    'adalah', 'yang', 'dan', 'karena', 'memiliki', 'sering', 'digunakan',
+    'bisa', 'dapat', 'sayuran', 'warna', 'aroma', 'tekstur', 'masakan',
+  ].some((marker) => lower.includes(marker));
+
+  return hasIndonesian && !hasEnglish;
+}
+
+function ensureTwoIndonesianSentences(text, vegetableName) {
+  const displayName = getDisplayName(vegetableName);
+  let cleaned = removeMixedEnglish(text);
+
+  if (!cleaned) {
+    return '';
+  }
+
+  cleaned = cleaned
+    .replace(/\b(onion|carrot|cabbage|cauliflower|chilli|chili|corn|cucumber|eggplant|garlic|ginger|lettuce|peas|potato|turnip|soybean|spinach|beetroot)\b/gi, displayName)
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!containsTargetVegetable(cleaned, vegetableName)) {
+    cleaned = `${displayName} adalah sayuran yang sedang terdeteksi. ${cleaned}`;
+  }
+
+  const sentences = splitSentences(cleaned).slice(0, 2);
+  return sentences
+    .map((sentence) => sentence.replace(/[.!?]*$/, '.'))
+    .join(' ')
+    .trim();
 }
 
 export class RootFactsService {
@@ -196,49 +229,60 @@ export class RootFactsService {
     this.currentTone = allowedTone ? tone : TONE_CONFIG.defaultTone;
   }
 
-  buildPrompt(vegetableName) {
+  buildPrompt(vegetableName, attempt = 1) {
     const angle = pickRandom(FACT_ANGLES);
     const toneInstruction = TONE_PROMPTS[this.currentTone] || TONE_PROMPTS.normal;
     const displayName = getDisplayName(vegetableName);
 
+    if (attempt > 1) {
+      return [
+        `Deskripsikan terkait ${displayName} ini dalam bahasa Indonesia.`,
+        `Tulis tepat dua kalimat pendek tentang ${displayName}.`,
+        `Bahas ${displayName} saja, terutama dari sisi ${angle}.`,
+        'Jangan memakai bahasa Inggris.',
+        'Jangan menyebut buah, apel, chef, atau sayuran lain.',
+        'Jangan menulis instruksi, judul, daftar, atau kalimat pembuka yang tidak perlu.',
+      ].join(' ');
+    }
+
     return [
-      'Task: Write a unique fun fact about exactly one vegetable.',
-      `Target vegetable label: ${vegetableName}.`,
-      `Indonesian vegetable name: ${displayName}.`,
-      `Only discuss ${displayName}. Do not mention apple, fruit, or any different vegetable.`,
-      `Focus: ${angle}.`,
+      `Deskripsikan terkait ${displayName} ini dalam bahasa Indonesia.`,
+      `Sayuran yang terdeteksi adalah ${displayName}.`,
+      `Buat fakta menarik tentang ${displayName} saja dengan fokus ${angle}.`,
       toneInstruction,
-      'Output language: Indonesian.',
-      `Start the first sentence with "${displayName}".`,
-      'Output format: exactly two short Indonesian sentences.',
-      'Maximum length: 45 Indonesian words.',
-      'Do not include medical claims. Do not say you are an AI. Do not repeat the prompt.',
+      'Tulis tepat dua kalimat pendek.',
+      `Kalimat pertama harus dimulai dengan kata "${displayName}".`,
+      'Jangan memakai bahasa Inggris.',
+      'Jangan menyebut buah, apel, chef, atau sayuran lain.',
+      'Jangan memberikan klaim medis.',
     ].join(' ');
   }
 
   cleanGeneratedText(text, vegetableName) {
     const displayName = getDisplayName(vegetableName);
     let cleaned = String(text || '')
+      .replace(/^(Tugas|Sayuran yang terdeteksi|Deskripsikan|Fokus|Gaya bahasa|Jawaban|Fakta menarik)\s*:.*$/gim, '')
       .replace(/^(Task|Target vegetable label|Indonesian vegetable name|Vegetable|Focus|Output language|Output format|Maximum length)\s*:.*$/gim, '')
       .replace(/^\s*(Fun fact|Fakta menarik|Answer|Jawaban)\s*:?\s*/i, '')
       .replace(/\s+/g, ' ')
       .trim();
 
     if (!cleaned) {
-      throw new Error(`Model generative AI belum menghasilkan teks untuk ${vegetableName}.`);
+      throw new Error(`Model generative AI belum menghasilkan teks untuk ${displayName}.`);
     }
 
     cleaned = replaceWrongProduceTerms(cleaned, vegetableName);
+    cleaned = ensureTwoIndonesianSentences(cleaned, vegetableName);
 
-    if (!containsTargetVegetable(cleaned, vegetableName)) {
-      cleaned = `${displayName} adalah sayuran yang sedang terdeteksi. ${cleaned}`;
+    if (!cleaned || !containsTargetVegetable(cleaned, vegetableName) || !isMostlyIndonesian(cleaned)) {
+      throw new Error(`Teks generative AI belum konsisten memakai bahasa Indonesia untuk ${displayName}.`);
     }
 
     return cleaned;
   }
 
-  async generateOnce(vegetableName) {
-    const prompt = this.buildPrompt(vegetableName);
+  async generateOnce(vegetableName, attempt = 1) {
+    const prompt = this.buildPrompt(vegetableName, attempt);
     const result = await this.generator(prompt, {
       max_new_tokens: this.config.maxNewTokens,
       temperature: this.config.temperature,
@@ -267,12 +311,18 @@ export class RootFactsService {
     this.isGenerating = true;
 
     try {
-      const firstText = await this.generateOnce(vegetableName);
-      if (containsTargetVegetable(firstText, vegetableName)) {
-        return firstText;
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          return await this.generateOnce(vegetableName, attempt);
+        } catch (error) {
+          lastError = error;
+          console.warn(`Percobaan generate fakta ke-${attempt} belum valid.`, error);
+        }
       }
 
-      return await this.generateOnce(vegetableName);
+      throw lastError || new Error('Model generative AI belum menghasilkan fakta berbahasa Indonesia.');
     } finally {
       this.isGenerating = false;
     }

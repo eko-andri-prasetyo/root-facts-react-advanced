@@ -9,15 +9,15 @@ export const APP_CONFIG = {
 };
 
 export const ROOT_FACTS_CONFIG = {
-  temperature: 0.75,
-  maxNewTokens: 110,
-  topP: 0.9,
+  temperature: 0.55,
+  maxNewTokens: 90,
+  topP: 0.85,
   doSample: true,
 };
 
 export const TONE_CONFIG = {
   availableTones: [
-    { value: 'normal', label: 'Normal' },
+    { value: 'normal', label: 'Standar' },
     { value: 'funny', label: 'Lucu' },
     { value: 'history', label: 'Sejarah' },
     { value: 'professional', label: 'Profesional' },

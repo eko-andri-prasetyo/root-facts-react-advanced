@@ -107,7 +107,7 @@ function CameraSection({
               disabled={isRunning}
               aria-label="Pilih kamera"
             >
-              <option value="default">Kamera belakang/default</option>
+              <option value="default">Kamera belakang/utama</option>
               <option value="front">Kamera depan</option>
             </select>
           </div>

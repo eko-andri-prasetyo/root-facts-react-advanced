@@ -29,7 +29,7 @@ function InfoPanel({ appState, detectionResult, funFactData, error, onCopyFact, 
       {detectionResult && (
         <div className="live-prediction">
           <Gauge size={14} />
-          <span>{detectionResult.className}</span>
+          <span>{detectionResult.displayName || detectionResult.className}</span>
           <strong>{Math.round(detectionResult.score * 100)}%</strong>
         </div>
       )}
@@ -66,7 +66,7 @@ function InfoPanel({ appState, detectionResult, funFactData, error, onCopyFact, 
       <div id="state-result" className="result-card result-main fadeIn">
         <div className="detected-badge">
           <CheckCircle size={14} />
-          <span id="detected-name">{detectionResult.className}</span>
+          <span id="detected-name">{detectionResult.displayName || detectionResult.className}</span>
         </div>
 
         <div className="fun-fact-card">
