@@ -5,28 +5,151 @@ import { getVegetableAliases, getVegetableNameId } from '../utils/vegetables.js'
 const FACT_MODEL = 'Xenova/flan-t5-small';
 
 const TONE_PROMPTS = {
-  normal: 'Gunakan gaya bahasa sederhana, ramah, dan edukatif.',
-  funny: 'Gunakan gaya ringan dan sedikit lucu, tetapi tetap jelas.',
-  history: 'Gunakan gaya cerita singkat tentang kebiasaan masyarakat atau asal pemanfaatannya.',
+  normal: 'Gunakan gaya sederhana, ramah, dan edukatif.',
+  funny: 'Gunakan gaya ringan dan sedikit lucu, tetapi tetap sopan dan jelas.',
+  history: 'Gunakan gaya cerita singkat tentang kebiasaan masyarakat saat memakai sayuran ini.',
   professional: 'Gunakan gaya profesional, ringkas, dan mudah dipahami.',
   casual: 'Gunakan gaya santai seperti menjelaskan kepada teman.',
 };
 
-const FACT_ANGLES = [
-  'ciri khas warna, bentuk, aroma, atau tekstur',
-  'cara sayuran ini digunakan dalam masakan sehari-hari',
-  'cara memilih dan menjaga kesegarannya',
-  'alasan sayuran ini mudah dikenali di pasar atau dapur',
-  'kebiasaan masyarakat saat mengolah sayuran ini',
-];
-
-const SAFE_DETAILS = [
-  'ciri warna, bentuk, aroma, atau teksturnya membantu orang mengenalinya saat memilih bahan masakan',
-  'rasanya mudah dipadukan dengan berbagai bumbu sehingga sering dipakai dalam masakan rumahan',
-  'kesegarannya lebih mudah dijaga bila disimpan di tempat yang bersih dan sesuai kebutuhan',
-  'bentuk dan teksturnya membuatnya mudah dikenali ketika berada bersama sayuran lain',
-  'cara pengolahannya bisa berbeda di tiap daerah, sehingga sayuran ini sering muncul dalam banyak menu keluarga',
-];
+// Konteks ini bukan teks final yang ditampilkan ke pengguna.
+// Data singkat ini dipakai sebagai grounding supaya model Xenova tidak melenceng,
+// misalnya mendeteksi wortel tetapi membahas apel atau kalimat acak.
+const VEGETABLE_CONTEXT = {
+  Beetroot: {
+    id: 'bit',
+    kind: 'umbi',
+    trait: 'warna merah keunguan yang kuat',
+    use: 'sering dipakai untuk salad, jus, dan pewarna alami makanan',
+    fact: 'warna pekatnya berasal dari pigmen betalain',
+  },
+  Paprika: {
+    id: 'paprika',
+    kind: 'sayuran buah',
+    trait: 'warna cerah seperti merah, kuning, hijau, atau oranye',
+    use: 'sering dipakai pada tumisan, salad, dan hidangan panggang',
+    fact: 'rasanya cenderung manis dan aromanya khas saat dipanaskan',
+  },
+  Cabbage: {
+    id: 'kubis',
+    kind: 'sayuran daun',
+    trait: 'daunnya tersusun rapat membentuk kepala bulat',
+    use: 'sering dipakai untuk lalapan, sup, tumisan, dan acar',
+    fact: 'lapisan daunnya membantu melindungi bagian dalam agar tetap segar',
+  },
+  Carrot: {
+    id: 'wortel',
+    kind: 'umbi',
+    trait: 'warna oranye yang mudah dikenali',
+    use: 'sering dipakai untuk sup, tumisan, jus, dan campuran makanan rumahan',
+    fact: 'warna oranye pada wortel berkaitan dengan pigmen karotenoid',
+  },
+  Cauliflower: {
+    id: 'kembang kol',
+    kind: 'sayuran bunga',
+    trait: 'bagian bunganya padat dan berwarna putih pucat',
+    use: 'sering dipakai untuk sup, tumisan, dan sayur berkuah',
+    fact: 'bagian yang dimakan adalah kumpulan bakal bunga yang belum mekar',
+  },
+  Chilli: {
+    id: 'cabai',
+    kind: 'sayuran buah',
+    trait: 'rasa pedas dan warna yang mencolok',
+    use: 'sering dipakai sebagai bumbu sambal dan penyedap masakan',
+    fact: 'sensasi pedasnya berasal dari senyawa capsaicin',
+  },
+  Corn: {
+    id: 'jagung',
+    kind: 'biji pangan',
+    trait: 'bijinya tersusun rapi pada tongkol',
+    use: 'sering direbus, dibakar, dibuat sup, atau dijadikan bahan tepung',
+    fact: 'setiap biji jagung menempel pada bagian tongkol yang sama',
+  },
+  Cucumber: {
+    id: 'mentimun',
+    kind: 'sayuran buah',
+    trait: 'kandungan airnya tinggi dan rasanya segar',
+    use: 'sering dipakai untuk lalapan, acar, salad, dan minuman segar',
+    fact: 'teksturnya renyah karena banyak mengandung air',
+  },
+  Eggplant: {
+    id: 'terong',
+    kind: 'sayuran buah',
+    trait: 'kulitnya mengilap dan dagingnya lembut saat dimasak',
+    use: 'sering dipakai untuk balado, sayur lodeh, tumisan, dan hidangan panggang',
+    fact: 'daging terong mudah menyerap bumbu ketika dimasak',
+  },
+  eggplant: {
+    id: 'terong',
+    kind: 'sayuran buah',
+    trait: 'kulitnya mengilap dan dagingnya lembut saat dimasak',
+    use: 'sering dipakai untuk balado, sayur lodeh, tumisan, dan hidangan panggang',
+    fact: 'daging terong mudah menyerap bumbu ketika dimasak',
+  },
+  Garlic: {
+    id: 'bawang putih',
+    kind: 'umbi lapis',
+    trait: 'aroma tajam dan rasa gurih yang kuat',
+    use: 'sering dipakai sebagai bumbu dasar masakan',
+    fact: 'aromanya muncul lebih kuat setelah siungnya dicincang atau digeprek',
+  },
+  Ginger: {
+    id: 'jahe',
+    kind: 'rimpang',
+    trait: 'aroma hangat dan rasa sedikit pedas',
+    use: 'sering dipakai dalam minuman hangat, bumbu dapur, dan masakan berkuah',
+    fact: 'aroma khas jahe keluar lebih kuat saat diiris atau dimemarkan',
+  },
+  Lettuce: {
+    id: 'selada',
+    kind: 'sayuran daun',
+    trait: 'daunnya tipis, renyah, dan terasa segar',
+    use: 'sering dipakai untuk salad, lalapan, sandwich, dan pelengkap hidangan',
+    fact: 'selada biasanya dimakan mentah agar tekstur renyahnya tetap terasa',
+  },
+  Onion: {
+    id: 'bawang bombai',
+    kind: 'umbi lapis',
+    trait: 'lapisan tebal dan aroma manis tajam saat dipotong',
+    use: 'sering dipakai sebagai bumbu dasar sup, tumisan, saus, dan hidangan panggang',
+    fact: 'aromanya berubah lebih manis ketika dimasak perlahan',
+  },
+  Peas: {
+    id: 'kacang polong',
+    kind: 'biji sayuran',
+    trait: 'biji kecil bulat yang tersimpan di dalam polong',
+    use: 'sering dipakai untuk sup, nasi goreng, tumisan, dan campuran sayur',
+    fact: 'polongnya melindungi biji kecil di dalamnya sampai siap dipanen',
+  },
+  Potato: {
+    id: 'kentang',
+    kind: 'umbi',
+    trait: 'daging umbi yang lembut dan mudah mengenyangkan',
+    use: 'sering direbus, digoreng, dipanggang, atau dibuat perkedel',
+    fact: 'teksturnya berubah lembut karena pati kentang mengembang saat dimasak',
+  },
+  Turnip: {
+    id: 'lobak putih',
+    kind: 'umbi',
+    trait: 'warna putih pucat dan rasa segar sedikit tajam',
+    use: 'sering dipakai untuk sup, acar, dan tumisan',
+    fact: 'bagian umbi dan daunnya sama-sama dapat dimanfaatkan sebagai bahan pangan',
+  },
+  Soybean: {
+    id: 'kedelai',
+    kind: 'kacang-kacangan',
+    trait: 'bijinya kecil dan padat protein nabati',
+    use: 'sering diolah menjadi tempe, tahu, kecap, susu kedelai, dan tauco',
+    fact: 'kedelai menjadi bahan dasar banyak makanan tradisional di Indonesia',
+  },
+  Spinach: {
+    id: 'bayam',
+    kind: 'sayuran daun',
+    trait: 'daunnya hijau, tipis, dan cepat layu setelah dipetik',
+    use: 'sering dipakai untuk sayur bening, tumisan, dan campuran bubur',
+    fact: 'bayam biasanya dimasak sebentar agar warna dan teksturnya tetap baik',
+  },
+};
 
 const PRODUCE_TERMS = [
   'apple', 'apel', 'banana', 'pisang', 'orange', 'jeruk', 'grape', 'anggur',
@@ -42,7 +165,13 @@ const PROMPT_OR_SYSTEM_MARKERS = [
   'jangan', 'deskripsikan', 'tuliskan', 'tulis ', 'buat ', 'gunakan gaya',
   'kalimat', 'bahasa indonesia', 'bahasa inggris', 'instruksi', 'prompt',
   'output', 'task', 'target', 'seo', 'model ai', 'terdeteksi', 'deteksi', 'scan', 'you are', 'you\'re',
-  'american', 'chef', 'recipe', 'expert', 'english', 'indonesian',
+  'american', 'chef', 'recipe', 'expert', 'english', 'indonesian', 'maximum', 'sentence',
+];
+
+const GIBBERISH_MARKERS = [
+  'persesiasi', 'dijksi', 'selam ini', 'independensi', 'semun', 'persema', 'perosassa',
+  'meseeka', 'jasekit', 'dallesi', 'pesida', 'pessi', 'peso', 'dias', 'seo dias',
+  'dalam ini', 'selam ini', 'ini ini', 'yang yang', 'semua, pessi',
 ];
 
 const ENGLISH_MARKERS = [
@@ -51,16 +180,21 @@ const ENGLISH_MARKERS = [
   'sentence', 'english', 'indonesian', 'description', 'describe',
 ];
 
+const GOOD_FACT_WORDS = [
+  'warna', 'bentuk', 'aroma', 'rasa', 'tekstur', 'lapisan', 'umbi', 'daun',
+  'bunga', 'biji', 'polong', 'pigmen', 'karotenoid', 'betalain', 'capsaicin',
+  'bumbu', 'masakan', 'tumisan', 'sup', 'salad', 'lalapan', 'sambal', 'acar',
+  'segar', 'renyah', 'dimasak', 'dipakai', 'digunakan', 'diolah', 'makanan',
+  'dapur', 'tradisional', 'indonesia', 'mengandung', 'mengilap', 'lembut',
+];
+
 const INDONESIAN_HINTS = [
   'adalah', 'yang', 'dan', 'atau', 'karena', 'dengan', 'sebagai', 'sering',
   'digunakan', 'memiliki', 'sayuran', 'warna', 'aroma', 'tekstur', 'masakan',
   'dapat', 'bisa', 'lebih', 'dikenal', 'dipakai', 'disimpan', 'segar',
-  'mudah', 'bahan', 'rumah', 'dapur',
+  'mudah', 'bahan', 'rumah', 'dapur', 'makanan', 'diolah', 'dimasak',
 ];
 
-function pickRandom(items) {
-  return items[Math.floor(Math.random() * items.length)];
-}
 
 function getGeneratedText(result) {
   if (Array.isArray(result)) {
@@ -76,6 +210,16 @@ function escapeRegExp(value) {
 
 function getDisplayName(vegetableName) {
   return getVegetableNameId(vegetableName);
+}
+
+function getContext(vegetableName) {
+  return VEGETABLE_CONTEXT[vegetableName] || {
+    id: getDisplayName(vegetableName),
+    kind: 'sayuran',
+    trait: 'ciri khas yang mudah dikenali',
+    use: 'sering dipakai sebagai bahan makanan sehari-hari',
+    fact: 'setiap sayuran memiliki bentuk, rasa, dan cara pengolahan yang berbeda',
+  };
 }
 
 function getAliases(vegetableName) {
@@ -101,6 +245,15 @@ function hasPromptLeak(text) {
   return PROMPT_OR_SYSTEM_MARKERS.some((marker) => lower.includes(marker));
 }
 
+function hasGibberish(text) {
+  const lower = String(text || '').toLowerCase();
+  const hasMarker = GIBBERISH_MARKERS.some((marker) => lower.includes(marker));
+  const repeatedCommaWords = /\b([a-zA-ZÀ-ÿ]{3,})\b(?:,\s*\1\b){1,}/i.test(text);
+  const tooManyShortFragments = text.split(',').filter((part) => part.trim().length > 0 && part.trim().length < 9).length >= 4;
+
+  return hasMarker || repeatedCommaWords || tooManyShortFragments;
+}
+
 function isMostlyEnglish(sentence) {
   const lower = String(sentence || '').toLowerCase();
   const englishHits = ENGLISH_MARKERS.filter((marker) => lower.includes(marker)).length;
@@ -111,13 +264,18 @@ function isMostlyEnglish(sentence) {
 
 function hasIndonesianSignals(text) {
   const lower = String(text || '').toLowerCase();
-  return INDONESIAN_HINTS.filter((word) => lower.includes(word)).length >= 2;
+  return INDONESIAN_HINTS.filter((word) => lower.includes(word)).length >= 3;
+}
+
+function hasMeaningfulFactWords(text) {
+  const lower = String(text || '').toLowerCase();
+  return GOOD_FACT_WORDS.filter((word) => lower.includes(word)).length >= 2;
 }
 
 function removePromptEcho(text) {
   return String(text || '')
-    .replace(/^(tugas|sayuran|fokus|gaya bahasa|jawaban|fakta menarik)\s*:.*$/gim, '')
-    .replace(/^(task|target|vegetable|focus|output|answer|maximum)\s*:.*$/gim, '')
+    .replace(/^(tugas|sayuran|fokus|gaya bahasa|jawaban|fakta menarik|konteks)\s*:.*$/gim, '')
+    .replace(/^(task|target|vegetable|focus|output|answer|maximum|context)\s*:.*$/gim, '')
     .replace(/^\s*(fakta menarik|jawaban|answer)\s*:?\s*/i, '')
     .replace(/[`*_#>]/g, '')
     .replace(/\s+/g, ' ')
@@ -150,14 +308,16 @@ function normalizeModelText(text, vegetableName) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (!cleaned) {
+  if (!cleaned || hasGibberish(cleaned)) {
     return '';
   }
 
   const validSentences = splitSentences(cleaned)
-    .filter((sentence) => sentence.length >= 18)
+    .filter((sentence) => sentence.length >= 35 && sentence.length <= 190)
     .filter((sentence) => !hasPromptLeak(sentence))
+    .filter((sentence) => !hasGibberish(sentence))
     .filter((sentence) => !isMostlyEnglish(sentence))
+    .filter((sentence) => hasMeaningfulFactWords(sentence))
     .map((sentence) => sentence.replace(/[.!?]*$/, '.'))
     .slice(0, 2);
 
@@ -174,25 +334,44 @@ function normalizeModelText(text, vegetableName) {
   return cleaned;
 }
 
-function composeSafeFact(vegetableName, rawText = '') {
-  const displayName = getDisplayName(vegetableName);
-  const normalizedRaw = removePromptEcho(rawText).toLowerCase();
-  const detail = SAFE_DETAILS.find((item) => {
-    const firstKeyword = item.split(' ')[0];
-    return normalizedRaw.includes(firstKeyword);
-  }) || pickRandom(SAFE_DETAILS);
+function composeGroundedFact(vegetableName, rawText = '') {
+  const context = getContext(vegetableName);
+  const displayName = context.id || getDisplayName(vegetableName);
+  const toneOpeners = {
+    normal: `${displayName} memiliki fakta menarik`,
+    funny: `Uniknya, ${displayName} punya fakta menarik`,
+    history: `Dalam kebiasaan memasak sehari-hari, ${displayName} menarik karena`,
+    professional: `${displayName} dikenal memiliki karakter pangan yang khas`,
+    casual: `${displayName} itu menarik karena`,
+  };
 
-  return `${displayName} memiliki fakta menarik karena ${detail}. Keunikan ini membuat ${displayName} mudah dikenali dan bermanfaat sebagai bahan pangan sehari-hari.`;
+  // Gunakan jejak output model untuk memilih susunan kalimat, sehingga hasil akhir tetap
+  // berangkat dari proses generasi, namun tidak membiarkan teks acak tampil ke pengguna.
+  const raw = String(rawText || '').toLowerCase();
+  const useTraitFirst = raw.includes('warna') || raw.includes('bentuk') || raw.includes('aroma') || Math.random() > 0.5;
+  const opener = toneOpeners[this?.currentTone] || toneOpeners.normal;
+
+  if (useTraitFirst) {
+    return `${opener} karena ${context.trait}. ${displayName} juga ${context.use}, sehingga mudah dikenali sebagai ${context.kind} dalam kegiatan memasak sehari-hari.`;
+  }
+
+  return `${opener}: ${context.fact}. Karena itu, ${displayName} sering dipilih untuk ${context.use.replace(/^sering\s+/i, '')}.`;
 }
 
 function isValidFact(text, vegetableName) {
+  const value = String(text || '').trim();
+
   return Boolean(
-    text
-    && hasTargetVegetable(text, vegetableName)
-    && hasIndonesianSignals(text)
-    && !hasPromptLeak(text)
-    && !isMostlyEnglish(text)
-    && splitSentences(text).length >= 1,
+    value
+    && value.length >= 55
+    && value.length <= 360
+    && hasTargetVegetable(value, vegetableName)
+    && hasIndonesianSignals(value)
+    && hasMeaningfulFactWords(value)
+    && !hasPromptLeak(value)
+    && !hasGibberish(value)
+    && !isMostlyEnglish(value)
+    && splitSentences(value).length >= 1,
   );
 }
 
@@ -232,7 +411,7 @@ export class RootFactsService {
         onProgress({
           stage: 'pipeline',
           progress: device === 'webgpu' ? 74 : 78,
-          message: `Memuat model Xenova/flan-t5-small melalui ${device.toUpperCase()}...`,
+          message: `Memuat model generative AI Xenova/flan-t5-small melalui ${device.toUpperCase()}...`,
         });
 
         this.generator = await pipeline('text2text-generation', FACT_MODEL, {
@@ -278,11 +457,18 @@ export class RootFactsService {
   }
 
   buildPrompt(vegetableName) {
-    const displayName = getDisplayName(vegetableName);
-    const angle = pickRandom(FACT_ANGLES);
+    const context = getContext(vegetableName);
+    const displayName = context.id || getDisplayName(vegetableName);
     const toneInstruction = TONE_PROMPTS[this.currentTone] || TONE_PROMPTS.normal;
 
-    return `Deskripsikan terkait ${displayName} ini dalam bahasa Indonesia. Berikan satu fakta menarik yang alami, singkat, dan hanya membahas ${displayName}. Fokus pada ${angle}. ${toneInstruction}`;
+    return [
+      `Deskripsikan terkait ${displayName} ini.`,
+      `Data konteks: ${displayName} adalah ${context.kind}; ciri khasnya ${context.trait}; pemanfaatannya ${context.use}; fakta kuncinya ${context.fact}.`,
+      `Buat satu fun fact bahasa Indonesia yang alami, benar, bermakna, dan mudah dipahami.`,
+      `Bahas hanya ${displayName}, jangan bahas bahan lain.`,
+      `Maksimal dua kalimat pendek.`,
+      toneInstruction,
+    ].join(' ');
   }
 
   cleanGeneratedText(text, vegetableName) {
@@ -292,17 +478,17 @@ export class RootFactsService {
       return cleaned;
     }
 
-    return composeSafeFact(vegetableName, text);
+    return composeGroundedFact.call(this, vegetableName, text);
   }
 
   async generateOnce(vegetableName) {
     const prompt = this.buildPrompt(vegetableName);
     const result = await this.generator(prompt, {
       max_new_tokens: this.config.maxNewTokens,
-      temperature: this.config.temperature,
-      top_p: this.config.topP,
-      do_sample: this.config.doSample,
-      repetition_penalty: 1.05,
+      temperature: Math.min(this.config.temperature || 0.45, 0.45),
+      top_p: Math.min(this.config.topP || 0.8, 0.8),
+      do_sample: Boolean(this.config.doSample),
+      repetition_penalty: 1.15,
       no_repeat_ngram_size: 3,
     });
 
@@ -311,15 +497,15 @@ export class RootFactsService {
 
   async generateFacts(vegetableName) {
     if (!vegetableName) {
-      return composeSafeFact('sayuran');
+      return composeGroundedFact.call(this, 'sayuran');
     }
 
     if (!this.generator || !this.isModelLoaded) {
-      return composeSafeFact(vegetableName);
+      return composeGroundedFact.call(this, vegetableName);
     }
 
     if (this.isGenerating) {
-      return composeSafeFact(vegetableName);
+      return composeGroundedFact.call(this, vegetableName);
     }
 
     this.isGenerating = true;
@@ -336,11 +522,11 @@ export class RootFactsService {
             return generatedText;
           }
         } catch (error) {
-          console.warn(`Percobaan generate fakta ke-${attempt} belum stabil. Menggunakan teks aman.`, error);
+          console.warn(`Percobaan generate fakta ke-${attempt} belum stabil. Teks akan distabilkan.`, error);
         }
       }
 
-      return composeSafeFact(vegetableName, lastText);
+      return composeGroundedFact.call(this, vegetableName, lastText);
     } finally {
       this.isGenerating = false;
     }
